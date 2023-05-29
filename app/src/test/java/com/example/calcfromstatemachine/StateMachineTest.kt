@@ -20,7 +20,7 @@ class StateMachineTest {
 
     @After
     fun tearDown() {
-        sm.stop()
+        sm.destroy()
     }
 
     @Test
@@ -74,7 +74,7 @@ class StateMachineTest {
     }
 
     @Test
-    fun testTransitionToAfterStop() {
+    fun testTransitionToAfterDestroy() {
         val stateA = mock(StateMachine.State::class.java)
         val stateB = mock(StateMachine.State::class.java)
 
@@ -83,7 +83,7 @@ class StateMachineTest {
         sm.setInitialState(stateA)
 
         sm.start()
-        sm.stop()
+        sm.destroy()
         sm.transitionTo(stateB)
 
         verify(stateA, never()).onExit()
@@ -92,13 +92,13 @@ class StateMachineTest {
     }
 
     @Test
-    fun testProcessMessageAfterStop() {
+    fun testProcessMessageAfterDestroy() {
         val state = mock(StateMachine.State::class.java)
 
         sm.addState(state)
         sm.setInitialState(state)
         sm.start()
-        sm.stop()
+        sm.destroy()
 
         val message = "Test Message"
         sm.processMessage(message)
