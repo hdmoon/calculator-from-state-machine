@@ -10,10 +10,16 @@ class CalculatorStateMachine : StateMachine() {
     var numberOnView: String = ""
 
     companion object {
+        const val ERROR: String = "ERROR!"
         private const val TAG: String = "CalcStateMachine"
     }
 
-    class DigitMessage(val value: Int) {
+    interface Message
+
+    class ClearMessage: Message
+    class CalculateMessage: Message
+
+    class DigitMessage(val value: Int): Message {
         init {
             when (value) {
                 in 0..9 -> Unit
@@ -22,7 +28,7 @@ class CalculatorStateMachine : StateMachine() {
         }
     }
 
-    class OperatorMessage(val op: String) {
+    class OperatorMessage(val op: String): Message {
         init {
             when (op) {
                 in listOf("+", "-", "*", "/") -> Unit
@@ -30,9 +36,6 @@ class CalculatorStateMachine : StateMachine() {
             }
         }
     }
-
-    class ClearMessage
-    class CalculateMessage
 
     // TODO: Add access modifier with writing tests
     var leftNumber: String = ""
@@ -44,6 +47,7 @@ class CalculatorStateMachine : StateMachine() {
     var operatorState: State = OperatorState()
     var rightNumberState: State = RightNumberState()
     var calculatedByEqualKeyState: State = CalculatedByEqualKeyState()
+    var errorState: State = ErrorState()
 
     init {
         addState(clearedState)
@@ -51,6 +55,7 @@ class CalculatorStateMachine : StateMachine() {
         addState(operatorState)
         addState(rightNumberState)
         addState(calculatedByEqualKeyState)
+        addState(errorState)
 
         setInitialState(clearedState)
     }
@@ -82,7 +87,11 @@ class CalculatorStateMachine : StateMachine() {
     }
 
     fun updateView(value: String) {
-        Log.d(TAG, "Updating view to $value")
+        if (value.isEmpty()) {
+            Log.d(TAG, "Clearing view")
+        } else {
+            Log.d(TAG, "Updating view to $value")
+        }
         numberOnView = value
     }
 
@@ -116,10 +125,15 @@ class CalculatorStateMachine : StateMachine() {
         override fun onProcessMessage(message: Any) {
             when (message) {
                 is DigitMessage -> {
-                    if (message.value == 0 && leftNumber == "0") {
-                        return
+                    if (leftNumber == "0") {
+                        if (message.value == 0) {
+                            return
+                        } else {
+                            leftNumber = message.value.toString()
+                        }
+                    } else {
+                        leftNumber += message.value
                     }
-                    leftNumber += message.value
                     transitionTo(this)
                 }
                 is OperatorMessage -> {
@@ -169,13 +183,26 @@ class CalculatorStateMachine : StateMachine() {
         override fun onProcessMessage(message: Any) {
             when (message) {
                 is DigitMessage -> {
-                    if (message.value == 0 && rightNumber == "0") {
-                        return
+                    if (rightNumber == "0") {
+                        if (message.value == 0) {
+                            return
+                        } else {
+                            rightNumber = message.value.toString()
+                        }
+                    } else {
+                        rightNumber += message.value
                     }
-                    rightNumber += message.value
+                    transitionTo(this)
                 }
                 is OperatorMessage -> {
-                    val calcResult = calculate()
+                    val calcResult: Int
+                    try {
+                        calcResult = calculate()
+                    } catch (ex: ArithmeticException) {
+                        transitionTo(errorState)
+                        return
+                    }
+
                     leftNumber = calcResult.toString()
                     rightNumber = ""
                     op = message.op
@@ -183,7 +210,13 @@ class CalculatorStateMachine : StateMachine() {
                     transitionTo(operatorState)
                 }
                 is CalculateMessage -> {
-                    val calcResult = calculate()
+                    val calcResult: Int
+                    try {
+                        calcResult = calculate()
+                    } catch (ex: ArithmeticException) {
+                        transitionTo(errorState)
+                        return
+                    }
                     leftNumber = calcResult.toString()
 
                     transitionTo(calculatedByEqualKeyState)
@@ -200,7 +233,7 @@ class CalculatorStateMachine : StateMachine() {
     inner class CalculatedByEqualKeyState : State("Calculated by pressing '=' key") {
         override fun onEnter() {
             super.onEnter()
-            updateView(rightNumber)
+            updateView(leftNumber)
         }
 
         override fun onProcessMessage(message: Any) {
@@ -211,11 +244,35 @@ class CalculatorStateMachine : StateMachine() {
                     transitionTo(leftNumberState)
                 }
                 is CalculateMessage -> {
-                    val calcResult = calculate()
+                    val calcResult: Int
+                    try {
+                        calcResult = calculate()
+                    } catch (ex: ArithmeticException) {
+                        transitionTo(errorState)
+                        return
+                    }
                     leftNumber = calcResult.toString()
 
                     transitionTo(this)
                 }
+                is ClearMessage -> transitionTo(clearedState)
+                else -> {
+                    Log.d(TAG, "$name: Ignoring message $message")
+                    return
+                }
+            }
+        }
+    }
+
+    inner class ErrorState : State("Error") {
+        override fun onEnter() {
+            super.onEnter()
+            clear()
+            updateView(ERROR)
+        }
+
+        override fun onProcessMessage(message: Any) {
+            when (message) {
                 is ClearMessage -> transitionTo(clearedState)
                 else -> {
                     Log.d(TAG, "$name: Ignoring message $message")
